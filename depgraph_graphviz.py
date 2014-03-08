@@ -23,6 +23,7 @@ from bpy_extras import image_utils
 import sys
 import os
 import pipes
+import subprocess
 from subprocess import Popen, PIPE, STDOUT
 
 class DepgraphGraphvizImage(bpy.types.Operator):
@@ -35,33 +36,31 @@ class DepgraphGraphvizImage(bpy.types.Operator):
         return context.scene is not None
 
     def execute(self, context):
-        scene = context.scene
-        source = scene.depgraph_graphviz()
+        input_filename = os.path.join(bpy.app.tempdir, "blender_depgraph.dot")
+        output_filename = os.path.join(bpy.app.tempdir, "blender_depgraph.png")
+        imagename = bpy.path.basename(output_filename)
 
-        filename = os.path.join(bpy.app.tempdir, "blender_depgraph.png")
-        imagename = bpy.path.basename(filename)
+        context.scene.depgraph_graphviz(input_filename)
 
-        process = Popen(["dot", "-T", "png:cairo", "-o", filename], stdin=PIPE, stdout=PIPE, stderr=STDOUT)
-        dot_stdout = process.communicate(input=source.encode(encoding='UTF-8'))[0]
+        input_file = open(input_filename, 'r')
+        output_file = open(output_filename, 'w')
+        dot_process = Popen(["dot", "-T", "png:cairo"], stdin=input_file, stdout=output_file)
+        dot_process.wait()
+        input_file.close()
+        output_file.flush()
+        output_file.close()
 
         if imagename in bpy.data.images:
             bpy.ops.image.reload()
-            #bpy.data.images[imagename].reload()
-            #bpy.data.images[imagename].update()
         else:
-            image_utils.load_image(filename)
+            image_utils.load_image(output_filename)
 
-        print(source)
         return {'FINISHED'}
 
 
 class DepgraphDebugPanel(bpy.types.Panel):
     """Debug tools for the depgraph"""
     bl_label = "Depgraph Debug"
-    #bl_idname = "SCENE_PT_depgraph_debug"
-    #bl_space_type = 'PROPERTIES'
-    #bl_region_type = 'WINDOW'
-    #bl_context = "scene"
     bl_idname = "IMAGE_PT_depgraph_debug"
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
