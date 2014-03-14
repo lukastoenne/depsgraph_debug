@@ -26,6 +26,19 @@ import pipes
 import subprocess
 from subprocess import Popen, PIPE, STDOUT
 
+# Supports both old and new refactored depsgraph,
+# determined based on available RNA properties
+if "depsgraph" in bpy.types.Scene.bl_rna.properties:
+    def write_graphviz(context, filename):
+        scene = context.scene
+        scene.depsgraph_rebuild()
+        graph = scene.depsgraph
+        graph.debug_graphviz(filename)
+else:
+    def write_graphviz(context, filename):
+        scene = context.scene
+        scene.depgraph_graphviz(filename)
+
 class DepgraphGraphvizImage(bpy.types.Operator):
     """Show depgraph as image"""
     bl_idname = "scene.depgraph_graphviz_image"
@@ -40,7 +53,7 @@ class DepgraphGraphvizImage(bpy.types.Operator):
         output_filename = os.path.join(bpy.app.tempdir, "blender_depgraph.png")
         imagename = bpy.path.basename(output_filename)
 
-        context.scene.depgraph_graphviz(input_filename)
+        write_graphviz(context, input_filename)
 
         input_file = open(input_filename, 'r')
         output_file = open(output_filename, 'w')
