@@ -33,7 +33,7 @@ if "depsgraph" in bpy.types.Scene.bl_rna.properties:
     def write_graphviz(context, filename):
         scene = context.scene
 
-        scene.depsgraph_rebuild(filename=filename)
+        scene.depsgraph_rebuild(filename)
 
         graph = scene.depsgraph
         graph.debug_graphviz(filename)
