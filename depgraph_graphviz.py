@@ -25,19 +25,46 @@ import os
 import pipes
 import subprocess
 from subprocess import Popen, PIPE, STDOUT
+import re
 
 # Supports both old and new refactored depsgraph,
 # determined based on available RNA properties
 if "depsgraph" in bpy.types.Scene.bl_rna.properties:
     def write_graphviz(context, filename):
         scene = context.scene
-        scene.depsgraph_rebuild()
+
+        scene.depsgraph_rebuild(filename=filename)
+
         graph = scene.depsgraph
         graph.debug_graphviz(filename)
 else:
     def write_graphviz(context, filename):
         scene = context.scene
         scene.depgraph_graphviz(filename)
+
+def convert_graphviz(input_filename, output_filename):
+    input_file = open(input_filename, 'r')
+    output_file = open(output_filename, 'w')
+    dot_process = Popen(["dot", "-T", "png:cairo"], stdin=input_file, stdout=output_file)
+    dot_process.wait()
+    input_file.close()
+    output_file.flush()
+    output_file.close()
+
+def files_single(basename):
+    valid = re.compile(r"%s$" % basename)
+    files = os.listdir(bpy.app.tempdir)
+    for filename in files:
+        if valid.match(filename):
+            yield os.path.join(bpy.app.tempdir, filename)
+
+def files_numbered(basename):
+    valid = re.compile(r"%s_(?P<number>[0-9]+)$" % basename)
+    files = os.listdir(bpy.app.tempdir)
+    for filename in files:
+        match = valid.match(filename)
+        if match:
+            yield os.path.join(bpy.app.tempdir, filename), int(match.group('number'))
 
 class DepgraphGraphvizImage(bpy.types.Operator):
     """Show depgraph as image"""
@@ -49,19 +76,18 @@ class DepgraphGraphvizImage(bpy.types.Operator):
         return context.scene is not None
 
     def execute(self, context):
-        input_filename = os.path.join(bpy.app.tempdir, "blender_depgraph.dot")
-        output_filename = os.path.join(bpy.app.tempdir, "blender_depgraph.png")
+        basename = "blender_depgraph"
+        input_filename = os.path.join(bpy.app.tempdir, basename)
+        output_filename = os.path.join(bpy.app.tempdir, basename + ".png")
         imagename = bpy.path.basename(output_filename)
 
         write_graphviz(context, input_filename)
 
-        input_file = open(input_filename, 'r')
-        output_file = open(output_filename, 'w')
-        dot_process = Popen(["dot", "-T", "png:cairo"], stdin=input_file, stdout=output_file)
-        dot_process.wait()
-        input_file.close()
-        output_file.flush()
-        output_file.close()
+        for filename in files_single(basename):
+            convert_graphviz(filename, filename + ".png")
+        
+        for filename, number in files_numbered(basename):
+            convert_graphviz(filename, filename + ".png")
 
         if imagename in bpy.data.images:
             bpy.ops.image.reload()
