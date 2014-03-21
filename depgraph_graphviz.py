@@ -27,13 +27,19 @@ import subprocess
 from subprocess import Popen, PIPE, STDOUT
 import re
 
+# if True: also output sequence of depsgraph build steps
+DEBUG_BUILD = False
+
 # Supports both old and new refactored depsgraph,
 # determined based on available RNA properties
 if "depsgraph" in bpy.types.Scene.bl_rna.properties:
     def write_graphviz(context, filename):
         scene = context.scene
 
-        scene.depsgraph_rebuild(filename)
+        if DEBUG_BUILD:
+            scene.depsgraph_rebuild(filename)
+        else:
+            scene.depsgraph_rebuild()
 
         graph = scene.depsgraph
         graph.debug_graphviz(filename)
