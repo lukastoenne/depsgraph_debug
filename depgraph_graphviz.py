@@ -19,7 +19,10 @@
 # <pep8 compliant>
 
 import bpy
+from bpy.types import PropertyGroup
+from bpy.props import *
 from bpy_extras import image_utils
+
 import sys
 import os
 import pipes
@@ -27,19 +30,34 @@ import subprocess
 from subprocess import Popen, PIPE, STDOUT
 import re
 
-# if True: also output sequence of depsgraph build steps
-DEBUG_BUILD = False
+def image_update(self, context=None):
+    image = self.id_data
 
-def write_graphviz(context, filename):
-    scene = context.scene
+    suffix_fmt = "%%0%dd" % self.suffix_len
+    filename = os.path.join(self.directory, self.basename + (suffix_fmt % self.index) + self.extension)
+    image.filepath = filename
 
-    if DEBUG_BUILD:
-        scene.depsgraph_rebuild(filename)
+def index_get(self):
+    return self.get('index', 0)
+
+def index_set(self, value):
+    if value < self.index_min:
+        self['index'] = self.index_min
+    elif value > self.index_max:
+        self['index'] = self.index_max
     else:
-        scene.depsgraph_rebuild()
+        self['index'] = value
 
-    graph = scene.depsgraph
-    graph.debug_graphviz(filename)
+class DepsgraphDebugSequence(PropertyGroup):
+    directory = StringProperty(name="Directory", description="Directory path of the image")
+    basename = StringProperty(name="Base Name", description="Base name of the image files")
+    extension = StringProperty(name="Extension", description="Filename extension")
+    suffix_len = IntProperty(name="Suffix Length")
+
+    index = IntProperty(name="Index", get=index_get, set=index_set, update=image_update)
+    index_min = IntProperty(name="Index Minimum")
+    index_max = IntProperty(name="Index Maximum")
+
 
 def convert_graphviz(input_filename, output_filename):
     input_file = open(input_filename, 'r')
@@ -50,48 +68,115 @@ def convert_graphviz(input_filename, output_filename):
     output_file.flush()
     output_file.close()
 
+def files_directory():
+    return bpy.app.tempdir
+
 def files_single(basename):
     valid = re.compile(r"%s$" % basename)
-    files = os.listdir(bpy.app.tempdir)
+    files = os.listdir(files_directory())
     for filename in files:
         if valid.match(filename):
             yield os.path.join(bpy.app.tempdir, filename)
 
+def graphviz_image_single(image, basename):
+    for filename in files_single(basename):
+        output_filename = "%s.png" % filename
+        imagename = bpy.path.basename(output_filename)
+
+        convert_graphviz(filename, output_filename)
+        if imagename in bpy.data.images:
+            bpy.ops.image.reload()
+        else:
+            image_utils.load_image(output_filename)
+        break
+
 def files_numbered(basename):
     valid = re.compile(r"%s_(?P<number>[0-9]+)$" % basename)
-    files = os.listdir(bpy.app.tempdir)
+    files = os.listdir(files_directory())
     for filename in files:
         match = valid.match(filename)
         if match:
-            yield os.path.join(bpy.app.tempdir, filename), int(match.group('number'))
+            yield os.path.join(bpy.app.tempdir, filename), match.group('number')
+
+def graphviz_image_sequence(image, basename):
+    settings = image.depsgraph_debug
+
+    settings.directory = files_directory()
+    settings.basename = "%s_" % basename
+    settings.extension = ".png"
+
+    first = True
+    for filename, suffix in files_numbered(basename):
+        index = int(suffix)
+        if first:
+            first = False
+            settings.index_min = index
+            settings.index_max = index
+            settings.suffix_len = len(suffix)
+        else:
+            settings.index_min = min(settings.index_min, index)
+            settings.index_max = max(settings.index_max, index)
+
+        output_filename = "%s.png" % filename
+        convert_graphviz(filename, output_filename)
+
+    settings.index = settings.index_min
+    image_update(settings)
+
 
 class DepgraphGraphvizImage(bpy.types.Operator):
     """Show depgraph as image"""
     bl_idname = "scene.depgraph_graphviz_image"
     bl_label = "Graphviz"
 
+    mode_items = [
+        ("GRAPH", "Graph", "Show basic depsgraph structure"),
+        ("REBUILD", "Rebuild", "Rebuild the depsgraph and show each step"),
+        ("EVAL", "Evaluate", "Evaluate the depsgraph and show each step"),
+        ]
+    mode = EnumProperty(name="Mode", items=mode_items, default='GRAPH')
+
     @classmethod
     def poll(cls, context):
-        return context.scene is not None
+        if context.scene is None:
+            return False
+        if context.space_data.type != 'IMAGE_EDITOR':
+            return False
+        if context.space_data.image is None:
+            return False
+        return True
+
+    debug_basename = {
+        'GRAPH'     : "blender_depgraph",
+        'REBUILD'   : "blender_depgraph_build",
+        'EVAL'      : "blender_depgraph_eval",
+        }
 
     def execute(self, context):
-        basename = "blender_depgraph"
+        image = context.space_data.image
+
+        basename = self.debug_basename[self.mode]
         input_filename = os.path.join(bpy.app.tempdir, basename)
         output_filename = os.path.join(bpy.app.tempdir, basename + ".png")
         imagename = bpy.path.basename(output_filename)
 
-        write_graphviz(context, input_filename)
+        scene = context.scene
+        if self.mode == 'GRAPH':
+            scene.depsgraph_rebuild()
 
-        for filename in files_single(basename):
-            convert_graphviz(filename, filename + ".png")
-        
-        for filename, number in files_numbered(basename):
-            convert_graphviz(filename, filename + ".png")
+            scene.depsgraph.debug_graphviz(input_filename)
+            graphviz_image_single(image, basename)
 
-        if imagename in bpy.data.images:
-            bpy.ops.image.reload()
-        else:
-            image_utils.load_image(output_filename)
+        elif self.mode == 'REBUILD':
+            scene.depsgraph_rebuild(input_filename)
+            graphviz_image_sequence(image, basename)
+
+        elif self.mode == 'EVAL':
+            if not scene.depsgraph:
+                scene.depsgraph_rebuild()
+
+            scene.depsgraph.debug_simulate(input_filename)
+            graphviz_image_sequence(image, basename)
 
         return {'FINISHED'}
 
@@ -105,13 +190,25 @@ class DepgraphDebugPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("scene.depgraph_graphviz_image")
+        layout.operator("scene.depgraph_graphviz_image", text="Graph").mode = 'GRAPH'
+        layout.operator("scene.depgraph_graphviz_image", text="Rebuild").mode = 'REBUILD'
+        layout.operator("scene.depgraph_graphviz_image", text="Evaluate").mode = 'EVAL'
+
+        image = context.space_data.image
+        if image:
+            layout.prop(image.depsgraph_debug, "index") 
 
 
 def register():
+    bpy.utils.register_class(DepsgraphDebugSequence)
+    bpy.types.Image.depsgraph_debug = PointerProperty(type=DepsgraphDebugSequence)
+
     bpy.utils.register_class(DepgraphGraphvizImage)
     bpy.utils.register_class(DepgraphDebugPanel)
 
 def unregister():
+    del bpy.types.Image.depsgraph_debug
+    bpy.utils.unregister_class(DepsgraphDebugSequence)
+    
     bpy.utils.unregister_class(DepgraphGraphvizImage)
     bpy.utils.unregister_class(DepgraphDebugPanel)
