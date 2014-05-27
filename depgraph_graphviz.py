@@ -131,7 +131,6 @@ class DepgraphGraphvizImage(bpy.types.Operator):
 
     mode_items = [
         ("GRAPH", "Graph", "Show basic depsgraph structure"),
-        ("REBUILD", "Rebuild", "Rebuild the depsgraph and show each step"),
         ("EVAL", "Evaluate", "Evaluate the depsgraph and show each step"),
         ]
     mode = EnumProperty(name="Mode", items=mode_items, default='GRAPH')
@@ -148,7 +147,6 @@ class DepgraphGraphvizImage(bpy.types.Operator):
 
     debug_basename = {
         'GRAPH'     : "blender_depgraph",
-        'REBUILD'   : "blender_depgraph_build",
         'EVAL'      : "blender_depgraph_eval",
         }
 
@@ -166,10 +164,6 @@ class DepgraphGraphvizImage(bpy.types.Operator):
 
             scene.depsgraph.debug_graphviz(input_filename)
             graphviz_image_single(image, basename)
-
-        elif self.mode == 'REBUILD':
-            scene.depsgraph_rebuild(input_filename)
-            graphviz_image_sequence(image, basename)
 
         elif self.mode == 'EVAL':
             if not scene.depsgraph:
@@ -191,7 +185,6 @@ class DepgraphDebugPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("scene.depgraph_graphviz_image", text="Graph").mode = 'GRAPH'
-        layout.operator("scene.depgraph_graphviz_image", text="Rebuild").mode = 'REBUILD'
         layout.operator("scene.depgraph_graphviz_image", text="Evaluate").mode = 'EVAL'
 
         image = context.space_data.image
