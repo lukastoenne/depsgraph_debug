@@ -30,6 +30,8 @@ import subprocess
 from subprocess import Popen, PIPE, STDOUT
 import re
 
+from depgraph_debug.addon_prefs import get_prefs
+
 def image_update(self, context=None):
     image = self.id_data
 
@@ -184,6 +186,12 @@ class DepgraphDebugPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        prefs = get_prefs(context)
+        
+        layout.prop(prefs, "depsgraph_eval_mode")
+        
+        layout.separator()
+        
         layout.operator("scene.depgraph_graphviz_image", text="Graph").mode = 'GRAPH'
         layout.operator("scene.depgraph_graphviz_image", text="Evaluate").mode = 'EVAL'
 

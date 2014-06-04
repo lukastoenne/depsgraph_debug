@@ -31,13 +31,15 @@ bl_info = {
 import os
 
 import bpy
-from depgraph_debug import depgraph_graphviz
+from depgraph_debug import depgraph_graphviz, addon_prefs
  
 
 def register():
+    addon_prefs.register()
     depgraph_graphviz.register()
 
 def unregister():
+    addon_prefs.unregister()
     depgraph_graphviz.unregister()
 
 if __name__ == "__main__":
