@@ -30,7 +30,7 @@ import subprocess
 from subprocess import Popen, PIPE, STDOUT
 import re
 
-from depgraph_debug.addon_prefs import get_prefs
+from depsgraph_debug.addon_prefs import get_prefs
 
 def image_update(self, context=None):
     image = self.id_data

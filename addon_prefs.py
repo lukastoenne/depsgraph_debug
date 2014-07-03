@@ -31,7 +31,7 @@ eval_mode_items = [
 eval_modes_new = set(item[3] for item in eval_mode_items if item[3] != 0)
 
 class DepgraphDebugPreferences(AddonPreferences):
-    bl_idname = "depgraph_debug"
+    bl_idname = "depsgraph_debug"
     def eval_mode_get(self):
         dval = bpy.app.debug_value
         if dval in eval_modes_new:
@@ -55,7 +55,7 @@ class DepgraphDebugPreferences(AddonPreferences):
 
 
 def get_prefs(context=bpy.context):
-    return context.user_preferences.addons["depgraph_debug"].preferences
+    return context.user_preferences.addons["depsgraph_debug"].preferences
 
 
 def register():
